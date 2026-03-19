@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Video Chat</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:,">
+</head>
+
+<body>
+  <div class="container">
+
+    <!-- ROOM JOIN -->
+    <div class="room-join">
+  <input type="text" id="roomInput" placeholder="Enter room ID..." />
+  <button class="btn join-btn" id="joinBtn">🔗 Join</button>
+    </div>
+    <!-- VIDEO -->
+    <div class="video-section">
+      <div class="video-box">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div class="label">You</div>
+      </div>
+
+      <div class="video-box">
+        <video id="remoteVideo" autoplay playsinline></video>
+        <div class="label">Friend</div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="actions">
+      <button class="btn" id="callBtn">📞 call</button>
+      <button class="btn" id="hangupBtn">⏹ hangup</button>
+      <button class="btn" id="muteBtn">🎤 mute</button>
+      <button class="btn" id="videoToggleBtn">📷 video off</button>
+    </div>
+
+    <!-- INCOMING -->
+    <div class="incoming-area" id="incomingCall">
+      <div>📲 Incoming call</div>
+      <div>
+        <button class="btn" id="acceptBtn">✅ accept</button>
+        <button class="btn" id="rejectBtn">❌ reject</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="./index.js"></script>
+</body>
+</html>
