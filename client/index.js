@@ -29,10 +29,9 @@ let localStream = null;
 let iceQueue = [];
 let isRemoteSet = false;
 
-// ==============================
+// ================================================
 //  ACTIONS (USER → SERVER)
 // OUTGOING (you send to server)
-// ==============================
 
 
 //JOIN ROOM
@@ -85,6 +84,9 @@ callBtn.onclick = async () => {
        pc = null;
        
       }
+
+    iceQueue = [];     
+    isRemoteSet = false;  
     
     localStream = await ensureMedia(localVideo);
 
@@ -125,6 +127,9 @@ acceptBtn.onclick = async () => {
        pc.close();
        pc = null;
       }
+
+      iceQueue = [];    
+      isRemoteSet = false;  
       
     incomingUI.style.display = "none";
 
@@ -210,14 +215,16 @@ hangupBtn.onclick = () => {
     joinBtn.disabled = false;
   }
 
+  // RESET ICE STATE
+  iceQueue = [];
+  isRemoteSet = false;
+
   console.log("Call ended");
 };
 
-
-// ==============================
+// =====================================================
 // HANDLERS (SERVER → USER)
 // INCOMING (server sends to you)
-// ==============================
 
 // INCOMING CALL / RECEIVE OFFER
 socket.on("offer", (offer) => {
@@ -298,6 +305,41 @@ socket.on("reject", () => {
 socket.on("room-full", () => {
   alert("TThis room is already taken for a 1-to-1 call 😅 Try another ID.");
 });
+
+// ==============================================
+// AUTO MIC SWITCH
+
+navigator.mediaDevices.addEventListener("devicechange", async () => {
+
+  if (!pc || !localStream) return;
+
+  try {
+
+    //Current mic in use
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const newTrack = stream.getAudioTracks()[0];
+
+    // Current Audio Sender
+    const sender = pc.getSenders().find(s => s.track && s.track.kind === "audio");
+
+    //Replace mic in live
+    if (sender && newTrack) {
+      await sender.replaceTrack(newTrack);
+    }
+
+    const oldTrack = localStream.getAudioTracks()[0];
+    if (oldTrack) oldTrack.stop();
+
+    localStream.removeTrack(oldTrack);
+    localStream.addTrack(newTrack);
+
+  } catch (err) {
+    console.error("Mic switch failed:", err);
+  }
+});
+
+// ======================================================
+
 // Cleanup on page close
 window.onbeforeunload = () => {
   socket.disconnect();
