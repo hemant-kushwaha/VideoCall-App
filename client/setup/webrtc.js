@@ -5,13 +5,19 @@ export default function setupConnection(socket,roomId, remoteVideo, localStream,
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     ...(iceServers || [])
-     ]
+     ],
+    iceTransportPolicy: "relay"
    });
+
+    pc.oniceconnectionstatechange = () => {
+    console.log("ICE state:", pc.iceConnectionState);
+  };
 
   // send ICE
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       socket.emit("ice-candidate", { candidate: e.candidate, roomId });
+      console.log("Sending ICE:", e.candidate);
     }
   };
 

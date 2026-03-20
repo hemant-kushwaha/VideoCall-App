@@ -26,7 +26,8 @@ let pc = null;
 let currentOffer = null;
 let localStream = null;
 
-
+let iceQueue = [];
+let isRemoteSet = false;
 
 // ==============================
 //  ACTIONS (USER → SERVER)
@@ -98,6 +99,8 @@ callBtn.onclick = async () => {
       await pc.setLocalDescription(offer);
 
       socket.emit("offer", { offer, roomId });
+
+      
       })
 
     callBtn.disabled = true;
@@ -140,6 +143,18 @@ acceptBtn.onclick = async () => {
        }
 
       await pc.setRemoteDescription(new RTCSessionDescription(currentOffer));
+      isRemoteSet = true;
+
+      // ADD Past ICE
+      for (const c of iceQueue) {
+         try {
+            await pc.addIceCandidate(new RTCIceCandidate(c));
+         } catch (e) {
+         console.error("Queue ICE error:", e);
+         }
+         }
+      iceQueue = [];
+
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -200,7 +215,7 @@ hangupBtn.onclick = () => {
 
 
 // ==============================
-// 📥 HANDLERS (SERVER → USER)
+// HANDLERS (SERVER → USER)
 // INCOMING (server sends to you)
 // ==============================
 
@@ -217,17 +232,44 @@ socket.on("offer", (offer) => {
 socket.on("answer", async (answer) => {
   if (!pc) return;
   await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  isRemoteSet = true;
+
+   // ADD Past ICE
+  for (const c of iceQueue) {
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(c));
+    } catch (e) {
+      console.error("Queue ICE error:", e);
+    }
+  }
+
+  iceQueue = [];
+
 });
 
 // ICE --> receive + use other users connection paths
 socket.on("ice-candidate", async (candidate) => {
-  if (!pc) return;
+    console.log("Received ICE:", candidate);
 
+   if (!pc) {
+    console.log("Storing ICE (pc not ready)");
+    iceQueue.push(candidate);
+    return;
+  }
+
+  if (!isRemoteSet) {
+  console.log("Queueing ICE (remote not set)");
+  iceQueue.push(candidate);
+  return;
+   }
+
+  //ADD future ICE
   try {
     await pc.addIceCandidate(new RTCIceCandidate(candidate));
   } catch (err) {
     console.warn("ICE candidate delayed, retrying...", err);
   }
+
 });
 
 // REMOTE HANGUP
