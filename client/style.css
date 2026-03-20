@@ -109,6 +109,10 @@ video {
   font-size: 0.9rem;
 }
 
+#localVideo {
+  transform: scaleX(-1);
+}
+
 .room-join input::placeholder {
   color: #8899aa;
 }
