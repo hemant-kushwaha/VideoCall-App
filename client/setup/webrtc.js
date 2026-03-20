@@ -6,7 +6,7 @@ export default function setupConnection(socket,roomId, remoteVideo, localStream,
     { urls: "stun:stun.l.google.com:19302" },
     ...(iceServers || [])
      ],
-    iceTransportPolicy: "relay"
+    // iceTransportPolicy: "relay"
    });
 
     pc.oniceconnectionstatechange = () => {
