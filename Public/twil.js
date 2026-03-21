@@ -15,7 +15,7 @@ async function getTurnCredentials() {
     // console.log('TURN Server Configuration:');
     // console.log(JSON.stringify(token.iceServers, null, 2));
     
-    console.log(token.iceServers);
+    // console.log(token.iceServers);
     return token.iceServers;
   } catch (error) {
     console.error('Error:', error.message);

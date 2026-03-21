@@ -14,11 +14,18 @@ const callBtn = document.getElementById("callBtn");
 const hangupBtn = document.getElementById("hangupBtn");
 const muteBtn = document.getElementById("muteBtn");
 const videoToggleBtn = document.getElementById("videoToggleBtn");
+const audioIcon = document.getElementById("audioIcon");
+
 
 const acceptBtn = document.getElementById("acceptBtn");
 const rejectBtn = document.getElementById("rejectBtn");
 
 const incomingUI = document.getElementById("incomingCall");
+
+const switchCameraBtn = document.getElementById("switchCameraBtn");
+const screenShareBtn = document.getElementById("screenShareBtn");
+
+
 
 // STATE
 let roomId = null;
@@ -28,6 +35,12 @@ let localStream = null;
 
 let iceQueue = [];
 let isRemoteSet = false;
+
+let usingFrontCamera = true;
+let isScreenSharing = false;
+let cameraTrack = null;
+let isOtherSharing = false;
+
 
 // ================================================
 //  ACTIONS (USER → SERVER)
@@ -48,7 +61,7 @@ joinBtn.onclick = () => {
 
   socket.emit("join", roomId);
 
-  console.log("Joined room:", roomId);
+  // console.log("Joined room:", roomId);
 };
 
 //VIDEO
@@ -187,7 +200,7 @@ rejectBtn.onclick = () => {
     socket.emit("reject", roomId);
   }
 
-  console.log("Call rejected");
+  // console.log("Call rejected");
 };
 
 // HANGUP
@@ -219,7 +232,7 @@ hangupBtn.onclick = () => {
   iceQueue = [];
   isRemoteSet = false;
 
-  console.log("Call ended");
+  // console.log("Call ended");
 };
 
 // =====================================================
@@ -232,7 +245,7 @@ socket.on("offer", (offer) => {
 
   incomingUI.style.display = "block";
 
-  console.log("Incoming call...");
+  // console.log("Incoming call...");
 });
 
 // RECEIVE ANSWER
@@ -256,16 +269,16 @@ socket.on("answer", async (answer) => {
 
 // ICE --> receive + use other users connection paths
 socket.on("ice-candidate", async (candidate) => {
-    console.log("Received ICE:", candidate);
+    // console.log("Received ICE:", candidate);
 
    if (!pc) {
-    console.log("Storing ICE (pc not ready)");
+    // console.log("Storing ICE (pc not ready)");
     iceQueue.push(candidate);
     return;
   }
 
   if (!isRemoteSet) {
-  console.log("Queueing ICE (remote not set)");
+  // console.log("Queueing ICE (remote not set)");
   iceQueue.push(candidate);
   return;
    }
@@ -292,18 +305,34 @@ socket.on("hangup", () => {
 
   callBtn.disabled = false;
   joinBtn.disabled = false;
-  console.log("Other user ended the call");
+  alert("Call ended by other user");
+  // console.log("Other user ended the call");
 });
 
 // REJECTED
 socket.on("reject", () => {
-  console.log("Call rejected by other user");
+  // console.log("Call rejected by other user");
   alert("Call rejected");
 });
 
 //ROOM-FULL
 socket.on("room-full", () => {
   alert("TThis room is already taken for a 1-to-1 call 😅 Try another ID.");
+});
+
+//Unexpected Leave
+socket.on("user-left", () => {
+  if (pc) {
+    pc.close();
+    pc = null;
+  }
+
+  remoteVideo.srcObject = null;
+
+  callBtn.disabled = false;
+  joinBtn.disabled = false;
+
+  alert("User disconnected unexpectedly");
 });
 
 // ==============================================
@@ -339,6 +368,87 @@ navigator.mediaDevices.addEventListener("devicechange", async () => {
 });
 
 // ======================================================
+//  SCREEN SHARE
+
+screenShareBtn.onclick = async () => {
+  if (!pc || !localStream) return;
+  if (isOtherSharing) {
+  alert("Other user is already sharing screen");
+  return;
+}
+
+  try {
+    if (!isScreenSharing) {
+      socket.emit("start-screen", roomId);
+
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const screenTrack = stream.getVideoTracks()[0];
+
+      cameraTrack = localStream.getVideoTracks()[0];
+
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+      await sender.replaceTrack(screenTrack);
+
+      localStream.removeTrack(cameraTrack);
+      localStream.addTrack(screenTrack);
+
+      localVideo.srcObject = localStream;
+
+      isScreenSharing = true;
+      screenShareBtn.innerText = "📷 Stop Share";
+
+      // auto stop
+      screenTrack.onended = stopScreenShare;
+
+      // console.log("🖥 Screen sharing");
+
+    } else {
+      stopScreenShare();
+      socket.emit("stop-screen", roomId);
+    }
+
+  } catch (err) {
+    console.error("Screen share error:", err);
+  }
+};
+
+async function stopScreenShare() {
+  if (!pc || !cameraTrack) return;
+
+  const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+  await sender.replaceTrack(cameraTrack);
+
+  const screenTrack = localStream.getVideoTracks()[0];
+  if (screenTrack) screenTrack.stop();
+
+  localStream.removeTrack(screenTrack);
+  localStream.addTrack(cameraTrack);
+
+  localVideo.srcObject = localStream;
+
+  isScreenSharing = false;
+  screenShareBtn.innerText = "🖥 Screen";
+
+
+
+  // console.log("Back to camera");
+}
+
+//HANDLERS for Screen Share
+socket.on("screen-started", () => {
+  isOtherSharing = true;
+  // console.log("Other user started screen share");
+});
+
+socket.on("screen-stopped", () => {
+  isOtherSharing = false;
+  // console.log("Other user stopped screen share");
+});
+
+socket.on("screen-denied", () => {
+  alert("Someone else is already sharing screen");
+});
+
 
 // Cleanup on page close
 window.onbeforeunload = () => {

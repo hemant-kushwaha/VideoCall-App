@@ -1,5 +1,7 @@
 const getTurnCredentials = require('./twil.js')
 
+let activeScreenSharer = {};
+
 function setupSocket(io) {
   io.on("connection", (socket) => {
 
@@ -43,6 +45,37 @@ function setupSocket(io) {
 
   socket.on("reject", (roomId) => {
     socket.to(roomId).emit("reject");
+  });
+
+
+  // Screen Sharing Events
+  socket.on("start-screen", (roomId) => {
+  if (activeScreenSharer[roomId]) {
+    socket.emit("screen-denied");
+    return;
+  }
+
+  activeScreenSharer[roomId] = socket.id;
+  socket.to(roomId).emit("screen-started");
+  });
+
+  socket.on("stop-screen", (roomId) => {
+  if (activeScreenSharer[roomId] === socket.id) {
+    delete activeScreenSharer[roomId];
+    socket.to(roomId).emit("screen-stopped");
+  }
+  });
+
+
+  // Uneexpected leave-->refresh / tab /close/ internet lost
+  socket.on("disconnecting", () => {
+  const rooms = [...socket.rooms];
+
+  rooms.forEach(roomId => {
+    if (roomId !== socket.id) {
+      socket.to(roomId).emit("user-left");
+    }
+  });
   });
 
   socket.on("disconnect", () => {

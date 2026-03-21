@@ -9,15 +9,15 @@ export default function setupConnection(socket,roomId, remoteVideo, localStream,
     // iceTransportPolicy: "relay"
    });
 
-    pc.oniceconnectionstatechange = () => {
-    console.log("ICE state:", pc.iceConnectionState);
-  };
+  //   pc.oniceconnectionstatechange = () => {
+  //   console.log("ICE state:", pc.iceConnectionState);
+  // };
 
   // send ICE
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       socket.emit("ice-candidate", { candidate: e.candidate, roomId });
-      console.log("Sending ICE:", e.candidate);
+      // console.log("Sending ICE:", e.candidate);
     }
   };
 

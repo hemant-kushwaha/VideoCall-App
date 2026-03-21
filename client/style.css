@@ -81,12 +81,27 @@ video {
   padding: 14px 20px;
   border-radius: 40px;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  flex-wrap: wrap;    
+  gap: 12px; 
+
 }
 
 #incomingCall {
   display: none;
+}
+
+.incomingtext{
+  color: #ccddee;
+  font-size: clamp(14px, 2vw, 16px); 
+
+}
+.incomingBtn{
+  display: flex ;
+  gap:40px; 
+  flex-wrap: wrap;       
+  justify-content: center;
 }
 
 .room-join {
