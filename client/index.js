@@ -34,12 +34,12 @@ let currentOffer = null;
 let localStream = null;
 
 let iceQueue = [];
-let isRemoteSet = false;
 
 let usingFrontCamera = true;
 let isScreenSharing = false;
 let cameraTrack = null;
 let isOtherSharing = false;
+let callEnded = false;
 
 
 // ================================================
@@ -97,26 +97,31 @@ callBtn.onclick = async () => {
        pc = null;
        
       }
-
-    iceQueue = [];     
-    isRemoteSet = false;  
     
     localStream = await ensureMedia(localVideo);
-
-    // get STUN/TURN  Server
-    socket.emit("get-ice");
 
     socket.once("ice-servers", async (iceServers) => {
 
       pc = setupConnection(socket,roomId, remoteVideo, localStream,iceServers);
 
+       for (const c of iceQueue) {
+      try {
+      await pc.addIceCandidate(new RTCIceCandidate(c));
+    } catch (error) {
+      console.log("Error:", error);
+    }
+       }
+      iceQueue = [];
+
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      socket.emit("offer", { offer, roomId });
-
+      socket.emit("offer", { offer, roomId });    
       
       })
+
+      // get STUN/TURN  Server
+      socket.emit("get-ice");
 
     callBtn.disabled = true;
     joinBtn.disabled = true;
@@ -139,19 +144,13 @@ acceptBtn.onclick = async () => {
       if (pc) {
        pc.close();
        pc = null;
-      }
-
-      iceQueue = [];    
-      isRemoteSet = false;  
+      } 
       
     incomingUI.style.display = "none";
 
     localStream = await ensureMedia(localVideo);
 
-    // get STUN/TURN  Server
-    socket.emit("get-ice");
-
-    socket.once("ice-servers", async (iceServers) => {
+      socket.once("ice-servers", async (iceServers) => {
 
       pc = setupConnection(socket,roomId, remoteVideo, localStream,iceServers);
 
@@ -159,11 +158,10 @@ acceptBtn.onclick = async () => {
        console.error("No offer to accept");
        return;
        }
-
+      
       await pc.setRemoteDescription(new RTCSessionDescription(currentOffer));
-      isRemoteSet = true;
 
-      // ADD Past ICE
+      // ADD Stored ICE
       for (const c of iceQueue) {
          try {
             await pc.addIceCandidate(new RTCIceCandidate(c));
@@ -180,6 +178,9 @@ acceptBtn.onclick = async () => {
       socket.emit("answer", { answer, roomId });
 
        })
+
+      // get STUN/TURN  Server
+       socket.emit("get-ice");
 
     callBtn.disabled = true;
     joinBtn.disabled = true;
@@ -205,6 +206,7 @@ rejectBtn.onclick = () => {
 
 // HANGUP
 hangupBtn.onclick = () => {
+  callEnded = true;
   if (pc) {
     pc.close();
     pc = null;
@@ -251,13 +253,15 @@ socket.on("offer", (offer) => {
 // RECEIVE ANSWER
 socket.on("answer", async (answer) => {
   if (!pc) return;
-  await pc.setRemoteDescription(new RTCSessionDescription(answer));
-  isRemoteSet = true;
 
-   // ADD Past ICE
+  await pc.setRemoteDescription(new RTCSessionDescription(answer)); 
+
+   // ADD Stored ICE
   for (const c of iceQueue) {
     try {
       await pc.addIceCandidate(new RTCIceCandidate(c));
+          console.log("ICE ADDED");
+
     } catch (e) {
       console.error("Queue ICE error:", e);
     }
@@ -272,20 +276,16 @@ socket.on("ice-candidate", async (candidate) => {
     // console.log("Received ICE:", candidate);
 
    if (!pc) {
-    // console.log("Storing ICE (pc not ready)");
+    // console.log("Storing ICE (pc or remote(browserQueue) not ready)");
     iceQueue.push(candidate);
     return;
   }
 
-  if (!isRemoteSet) {
-  // console.log("Queueing ICE (remote not set)");
-  iceQueue.push(candidate);
-  return;
-   }
-
   //ADD future ICE
   try {
     await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        // console.log("ICE ADDED");
+
   } catch (err) {
     console.warn("ICE candidate delayed, retrying...", err);
   }
@@ -294,6 +294,7 @@ socket.on("ice-candidate", async (candidate) => {
 
 // REMOTE HANGUP
 socket.on("hangup", () => {
+  callEnded = true;
   if (pc) {
     pc.close();
     pc = null;
@@ -322,6 +323,8 @@ socket.on("room-full", () => {
 
 //Unexpected Leave
 socket.on("user-left", () => {
+  if (callEnded) return;
+  
   if (pc) {
     pc.close();
     pc = null;
