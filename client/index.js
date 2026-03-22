@@ -34,11 +34,13 @@ let localStream = null;
 
 let iceQueue = [];
 
-let usingFrontCamera = true;
 let isScreenSharing = false;
 let cameraTrack = null;
 let isOtherSharing = false;
 let callEnded = false;
+
+let cameraDevices = [];
+let currentCameraIndex = 0;
 
 
 // ================================================
@@ -98,6 +100,8 @@ callBtn.onclick = async () => {
       }
     
     localStream = await ensureMedia(localVideo);
+    await updateCameraButton();
+    alert("⚠️ Camera switching may not work properly on your device or browser");
 
     socket.once("ice-servers", async (iceServers) => {
 
@@ -150,7 +154,9 @@ acceptBtn.onclick = async () => {
     incomingUI.style.display = "none";
 
     localStream = await ensureMedia(localVideo);
-
+    await updateCameraButton();
+    alert("⚠️ Camera switching may not work properly on your device or browser");
+    
       socket.once("ice-servers", async (iceServers) => {
 
       pc = setupConnection(socket,roomId, remoteVideo, localStream,iceServers);
@@ -396,6 +402,59 @@ navigator.mediaDevices.addEventListener("devicechange", async () => {
     console.error("Mic switch failed:", err);
   }
 });
+
+// ======================================================
+// CAMERA SWITCH
+
+switchCameraBtn.onclick = async () => {
+  if (!pc || !localStream || cameraDevices.length < 2) return;
+
+  try {
+    currentCameraIndex = (currentCameraIndex + 1) % cameraDevices.length;
+
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        deviceId: { exact: cameraDevices[currentCameraIndex].deviceId }
+      }
+    });
+
+    const newTrack = newStream.getVideoTracks()[0];
+
+    // STOP ALL old tracks (for mobile)
+    localStream.getTracks().forEach(track => track.stop());
+
+    // Replace track in connection
+    const sender = pc.getSenders().find(s => s.track?.kind === "video");
+    if (sender) {
+      await sender.replaceTrack(newTrack);
+    }
+
+    // Replace stream 
+    localStream = new MediaStream([newTrack]);
+
+    localVideo.srcObject = localStream;
+
+    console.log("Switched camera");
+
+  } catch (err) {
+    console.error("Camera switch failed:", err);
+  }
+};
+
+async function updateCameraButton() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  cameraDevices = devices.filter(d => d.kind === "videoinput");
+
+  console.log("Cameras:", cameraDevices);
+
+  if (cameraDevices.length <= 1) {
+    switchCameraBtn.innerText = "❌ Switch";
+    switchCameraBtn.disabled = true;
+  } else {
+    switchCameraBtn.innerText = "🔄 Switch";
+    switchCameraBtn.disabled = false;
+  }
+}
 
 // ======================================================
 //  SCREEN SHARE
