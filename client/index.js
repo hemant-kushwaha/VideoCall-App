@@ -14,7 +14,6 @@ const callBtn = document.getElementById("callBtn");
 const hangupBtn = document.getElementById("hangupBtn");
 const muteBtn = document.getElementById("muteBtn");
 const videoToggleBtn = document.getElementById("videoToggleBtn");
-const audioIcon = document.getElementById("audioIcon");
 
 
 const acceptBtn = document.getElementById("acceptBtn");
@@ -86,6 +85,7 @@ muteBtn.onclick = () => {
 
 //CALL
 callBtn.onclick = async () => {
+  callEnded = false; 
   if (!roomId) {
     alert("Join a room first");
     return;
@@ -95,7 +95,6 @@ callBtn.onclick = async () => {
     if (pc) {
        pc.close();
        pc = null;
-       
       }
     
     localStream = await ensureMedia(localVideo);
@@ -116,7 +115,9 @@ callBtn.onclick = async () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      socket.emit("offer", { offer, roomId });    
+      socket.emit("offer", { offer, roomId });  
+      callBtn.disabled = true;
+      joinBtn.disabled = true;  
       
       })
 
@@ -182,6 +183,7 @@ acceptBtn.onclick = async () => {
       // get STUN/TURN  Server
        socket.emit("get-ice");
 
+    callBtn.innerText='📞Call'   
     callBtn.disabled = true;
     joinBtn.disabled = true;
 
@@ -212,27 +214,26 @@ hangupBtn.onclick = () => {
     pc = null;
   }
 
-  if (localStream) {
+   if (localStream) {
     localStream.getTracks().forEach(track => track.stop());
     localStream = null;
   }
+ 
 
   localVideo.srcObject = null;
   remoteVideo.srcObject = null;
 
   currentOffer = null; 
-  callBtn.disabled = false;
-  joinBtn.disabled = false;
 
   if (roomId) {
     socket.emit("hangup", roomId);
+    callBtn.innerText='↩️📞Call Again'
     callBtn.disabled = false;
     joinBtn.disabled = false;
   }
 
   // RESET ICE STATE
   iceQueue = [];
-  isRemoteSet = false;
 
   // console.log("Call ended");
 };
@@ -268,6 +269,7 @@ socket.on("answer", async (answer) => {
   }
 
   iceQueue = [];
+  callBtn.innerText='📞Call'
 
 });
 
@@ -294,20 +296,37 @@ socket.on("ice-candidate", async (candidate) => {
 
 // REMOTE HANGUP
 socket.on("hangup", () => {
-  callEnded = true;
+   if (callEnded) {
+    console.log("Ignored late hangup");
+    return;
+  }
+  
+  callEnded =true;
+
   if (pc) {
     pc.close();
     pc = null;
   }
 
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+
+  localVideo.srcObject = null;
   remoteVideo.srcObject = null;
 
-  currentOffer = null; 
+  currentOffer = null;
 
+  callBtn.innerText='↩️📞Call Again'
   callBtn.disabled = false;
   joinBtn.disabled = false;
+
+  iceQueue = [];
+  
   alert("Call ended by other user");
-  // console.log("Other user ended the call");
+
+  console.log("Other user ended the call");
 });
 
 // REJECTED
@@ -322,20 +341,28 @@ socket.on("room-full", () => {
 });
 
 //Unexpected Leave
-socket.on("user-left", () => {
+socket.on("user-left", (roomId) => {
   if (callEnded) return;
-  
-  if (pc) {
-    pc.close();
-    pc = null;
+
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
   }
 
+  localVideo.srcObject = null;
   remoteVideo.srcObject = null;
 
-  callBtn.disabled = false;
-  joinBtn.disabled = false;
+  // socket.emit("leave-room", roomId);
+  callBtn.innerText='📞 Disconnected'
+  callBtn.disabled = true;
+  joinBtn.disabled = true;
 
-  alert("User disconnected unexpectedly");
+  
+   setTimeout(() => {
+    location.reload();
+  }, 1500);
+  // alert("Other Used Disconnected")
+  
 });
 
 // ==============================================
@@ -375,6 +402,12 @@ navigator.mediaDevices.addEventListener("devicechange", async () => {
 
 screenShareBtn.onclick = async () => {
   if (!pc || !localStream) return;
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    alert("Screen sharing not supported on this device");
+    return;
+  }
+
   if (isOtherSharing) {
   alert("Other user is already sharing screen");
   return;
@@ -382,9 +415,11 @@ screenShareBtn.onclick = async () => {
 
   try {
     if (!isScreenSharing) {
-      socket.emit("start-screen", roomId);
 
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+
+      socket.emit("start-screen", roomId);
+
       const screenTrack = stream.getVideoTracks()[0];
 
       cameraTrack = localStream.getVideoTracks()[0];

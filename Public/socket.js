@@ -42,12 +42,12 @@ function setupSocket(io) {
   socket.on("hangup", (roomId) => {
     socket.to(roomId).emit("hangup");
   });
-
+  
   socket.on("reject", (roomId) => {
     socket.to(roomId).emit("reject");
   });
 
-
+  
   // Screen Sharing Events
   socket.on("start-screen", (roomId) => {
   if (activeScreenSharer[roomId]) {
